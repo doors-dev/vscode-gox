@@ -1,0 +1,97 @@
+{
+	"name": "gox",
+	"displayName": "GoX",
+	"description": "Enables HTML template syntax as a first-class Go expression.",
+	"version": "0.0.1",
+	"engines": {
+		"vscode": "^1.109.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onLanguage:gox",
+		"onLanguage:go"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "gox.start",
+				"title": "GoX server start or restart"
+			}
+		],
+		"languages": [
+			{
+				"id": "gox",
+				"extensions": [
+					".gox"
+				],
+				"aliases": [
+					"GoX"
+				],
+				"configuration": "./language/gox.language-configuration.json"
+			}
+		],
+		"semanticTokenScopes": [
+			{
+				"language": "gox",
+				"scopes": {
+					"keyword": [
+						"keyword"
+					],
+					"keyword.control": [
+						"keyword.control"
+					],
+					"variable.tag": [
+						"entity.name.tag"
+					]
+				}
+			},
+			{
+				"language": "go",
+				"scopes": {
+					"keyword": [
+						"keyword"
+					],
+					"keyword.control": [
+						"keyword.control"
+					],
+					"variable.tag": [
+						"entity.name.tag"
+					]
+				}
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "npm run check-types && npm run lint && node esbuild.js",
+		"watch": "npm-run-all -p watch:*",
+		"watch:esbuild": "node esbuild.js --watch",
+		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+		"package": "npm run check-types && npm run lint && node esbuild.js --production",
+		"compile-tests": "tsc -p . --outDir out",
+		"watch-tests": "tsc -p . -w --outDir out",
+		"pretest": "npm run compile-tests && npm run compile && npm run lint",
+		"check-types": "tsc --noEmit",
+		"lint": "eslint src",
+		"test": "vscode-test"
+	},
+	"devDependencies": {
+		"@types/mocha": "^10.0.10",
+		"@types/node": "22.x",
+		"@types/vscode": "^1.109.0",
+		"@vscode/test-cli": "^0.0.12",
+		"@vscode/test-electron": "^2.5.2",
+		"esbuild": "^0.27.2",
+		"eslint": "^9.39.2",
+		"npm-run-all": "^4.1.5",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.54.0",
+		"vscode-languageclient": "^9.0.1",
+		"web-tree-sitter": "0.26.5",
+		"extract-zip": "^2.0.1",
+		"tar": "^7.5.9"
+	}
+}
