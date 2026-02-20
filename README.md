@@ -1,71 +1,76 @@
-# gox README
+# GoX (VS Code)
 
-This is the README for your extension "gox". After writing up a brief description, we recommend including the following sections.
+VS Code support for **GoX**: Tree-sitter–based highlighting/folding and GoX language-server integration for completion, diagnostics, go-to-definition, and refactors across both `.gox` and `.go` files.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **GoX Language Server (LSP)**
+  - Language features for **GoX (`.gox`)** and **Go (`.go`)** via the GoX language server (GoX proxies `gopls`).
 
-For example if there is an image subfolder under your extension project workspace:
+- **Syntax highlighting + folding**
+  - Semantic highlighting and folding powered by bundled Tree-sitter WASM grammars.
+  - Supports GoX and Go, including common embedded languages (HTML/CSS/JS) when present.
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **Tool management (automatic)**
+  - Downloads the GoX language server binary (unless you provide a custom path).
+  - Installs `gopls` at the pinned version using `go install` (unless you provide a custom path).
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- For automatic `gopls` installation: **Go toolchain (`go`) available in PATH**.
+- For automatic GoX download: **Windows/macOS/Linux on x64 or arm64**.
+- Network access is required for the first-time download/install (unless you point to existing binaries).
 
-## Extension Settings
+> GoX proxies `gopls` functionality for both `.go` and `.gox`, so VS Code’s Go extension language server must be disabled.
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## How it works
 
-For example:
+On activation, the extension:
 
-This extension contributes the following settings:
+1. Prompts to disable the VS Code Go extension language server (if it is enabled).
+2. Ensures `gox` and `gopls` are available (downloads/installs if missing).
+3. Starts the GoX language server for Go and GoX files.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Commands
 
-## Known Issues
+- **GoX: Start** (`gox.start`)  
+  Starts (or restarts) the GoX language server. Useful after changing settings.
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+## Settings
 
-## Release Notes
+You can override the managed binaries and use your own installations:
 
-Users appreciate release notes as you update your extension.
+### `gox.bin.gox`
 
-### 1.0.0
+Path to the GoX language server executable.
 
-Initial release of ...
+### `gox.bin.gopls`
 
-### 1.0.1
+Path to the `gopls` executable.
 
-Fixed issue #.
+Example `settings.json`:
 
-### 1.1.0
+```json
+{
+  "gox.bin.gox": "/absolute/path/to/gox",
+  "gox.bin.gopls": "gopls"
+}
+```
 
-Added features X, Y, and Z.
+## Troubleshooting
 
----
+- **Prompt says the Go extension language server must be disabled**
+  - GoX provides Go and GoX language features by running `gopls` internally, so the Go extension’s language server must be off.
+  - If you clicked “Cancel”, set `"go.useLanguageServer": false` in your user settings and run **GoX: Start**.
 
-## Following extension guidelines
+- **`gopls` installation fails**
+  - Install Go and ensure `go` is available in PATH, or set `"gox.bin.gopls"` to an existing `gopls` binary.
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+- **Unsupported platform/arch**
+  - Automatic GoX download supports Windows/macOS/Linux on x64/arm64 only.
+  - Install `gox` manually and set `"gox.bin.gox"`.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## Related projects
 
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- GoX language server and library: https://github.com/doors-dev/gox
+- Tree-sitter grammar: https://github.com/doors-dev/tree-sitter-gox

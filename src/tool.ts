@@ -16,8 +16,9 @@ export default abstract class Tool {
 		return `[${this.name}] ${message}`;
 	}
 	public async ensure(): Promise<string> {
-		const alternative = vscode.workspace.getConfiguration("gox").get<string | undefined>("alternateTools." + this.name, undefined);
-		if (alternative) {
+		console.log(vscode.workspace.getConfiguration("gox"))
+		const alternative = vscode.workspace.getConfiguration("gox").get<string | undefined>("bin." + this.name, undefined);
+		if (alternative && alternative != "") {
 			return alternative;
 		}
 		if (await this.check()) {
