@@ -1,3 +1,5 @@
+wasm/**
+query/**
 .vscode/**
 .vscode-test/**
 out/**

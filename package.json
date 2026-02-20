@@ -1,8 +1,13 @@
 {
 	"name": "gox",
 	"displayName": "GoX",
-	"description": "Enables HTML template syntax as a first-class Go expression.",
+	"description": "VS Code support for GoX: Tree-sitter–based highlighting/folding and GoX language-server integration for completion, diagnostics, go-to-definition, and refactors across both .gox and .go files.",
+	"repository": {
+		"type": "git",
+		"url":"https://github.com/doors-dev/vscode-gox"
+	},
 	"version": "0.0.1",
+	"publisher": "doors-dev",
 	"engines": {
 		"vscode": "^1.109.0"
 	},
@@ -14,18 +19,19 @@
 		"onLanguage:go"
 	],
 	"main": "./dist/extension.js",
+	"icon": "logo.png",
 	"contributes": {
 		"configuration": {
 			"title": "GoX",
 			"properties": {
 				"gox.bin.gox": {
 					"type": "string",
-					"default":"",
+					"default": "",
 					"description": "Alternative path for GoX language server."
 				},
 				"gox.bin.gopls": {
 					"type": "string",
-					"default":"",
+					"default": "",
 					"description": "alternative path for gopls language server."
 				}
 			}
@@ -45,7 +51,11 @@
 				"aliases": [
 					"GoX"
 				],
-				"configuration": "./language/gox.language-configuration.json"
+				"configuration": "./language/gox.language-configuration.json",
+				"icon": {
+					"light": "./icon.png",
+					"dark": "./icon.png"
+				}
 			}
 		],
 		"semanticTokenScopes": [
@@ -100,11 +110,14 @@
 		"@vscode/test-cli": "0.0.12",
 		"@vscode/test-electron": "2.5.2",
 		"esbuild": "0.27.2",
+		"extract-zip": "2.0.1",
 		"npm-run-all": "4.1.5",
+		"tar": "7.5.9",
 		"typescript": "5.9.3",
 		"vscode-languageclient": "9.0.1",
-		"web-tree-sitter": "0.26.5",
-		"extract-zip": "2.0.1",
-		"tar": "7.5.9"
+		"web-tree-sitter": "0.26.5"
+	},
+	"dependencies": {
+		"@vscode/vsce": "^3.7.1"
 	}
 }
