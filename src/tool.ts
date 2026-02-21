@@ -15,8 +15,7 @@ export default abstract class Tool {
 	private msg(message: string) {
 		return `[${this.name}] ${message}`;
 	}
-	public async ensure(): Promise<string> {
-		console.log(vscode.workspace.getConfiguration("gox"))
+	public async resolvePath(): Promise<string> {
 		const alternative = vscode.workspace.getConfiguration("gox").get<string | undefined>("bin." + this.name, undefined);
 		if (alternative && alternative != "") {
 			return alternative;
@@ -24,13 +23,22 @@ export default abstract class Tool {
 		if (await this.check()) {
 			return this.executablePath();
 		}
+		return ""
+	}
+	public async ensure(progress: any): Promise<string> {
+		const path = await this.resolvePath()
+		if (path != "") {
+			return path;
+		}
+		/*
 		await vscode.window.showInformationMessage(
 			this.msg("installing " + this.version),
-		);
+		); */
 		await this.clearInstallDir();
 		await this.ensureInstallDir();
 		try {
-			await this.install();
+			progress.report({ message: 'Installing ' + this.name + ' ' + this.version });
+			await this.install(progress);
 		} catch (err) {
 			const message = (err as any)?.message ?? "unknown";
 			throw new Error(this.msg("installation failed: " + message));
@@ -41,9 +49,11 @@ export default abstract class Tool {
 		}
 		await this.writeHash(hash);
 		await this.cleanOld();
+		/*
 		await vscode.window.showInformationMessage(
 			this.msg("installed successfully"),
-		);
+		); */
+		progress.report({ message: 'Successfuly installed ' + this.name + ' ' + this.version + ' to ' + await this.installDir() });
 		return await this.executablePath();
 	}
 	private async cleanOld(): Promise<void> {
@@ -205,6 +215,6 @@ export default abstract class Tool {
 		const mode = (await stat(filePath)).mode;
 		await chmod(filePath, mode | 0o111);
 	}
-	protected abstract install(): Promise<void>;
+	protected abstract install(progress: any): Promise<void>;
 
 }

@@ -28,37 +28,105 @@ function activate(ctx: vscode.ExtensionContext) {
 
 
 function start(ctx: vscode.ExtensionContext) {
-	let activationInProgress = false;
+	let inProgress = false;
 	return async () => {
-		const ok = await promptDisableGopls(ctx);
-		if (!ok) {
-			return;
-		}
-		if (activationInProgress) {
-			vscode.window.showWarningMessage("Already starting. Please wait.");
-			return;
-		}
-		activationInProgress = true;
-		if (client) {
-			client.stop();
-			client = undefined;
-		}
-		let gopls: string, gox: string;
-		try {
-			[gopls, gox] = await initalize(ctx);
-		} catch (err: any) {
-			vscode.window.showErrorMessage(err.message);
-			return;
-		}
-		client = new GoxLanguageClient(gopls, gox);
-		activationInProgress = false;
-		if (!active) {
-			client = undefined;
-			return;
-		}
-		client.start();
-		ctx.subscriptions.push(client);
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Window,
+				title: 'Gox Initialization',
+			},
+			async (progress) => {
+				if (inProgress) {
+					vscode.window.showWarningMessage("Already starting. Please wait.");
+					return;
+				}
+				inProgress = true;
+				if (client) {
+					client.stop();
+					client = undefined;
+				}
+				try {
+					await health(ctx, progress)
+				} catch (err: any) {
+					vscode.window.showErrorMessage(err.message);
+				} finally {
+					inProgress = false
+				}
+			}
+		);
 	}
+}
+
+async function health(ctx: vscode.ExtensionContext, progress: any) {
+	const gopls = new Gopls(ctx, versions.GOPLS);
+	progress.report({ message: 'Checking gopls...' });
+	let goplsPath = await gopls.resolvePath()
+	if (goplsPath == "") {
+		const choice = await vscode.window.showWarningMessage(
+			"GoX: Go language server " +
+			versions.GOPLS +
+			" not found. Install it into the GoX directory now?",
+			{
+				modal: true,
+				detail: "Alternatively you can configure gox.bin.gopls",
+			},
+			"Install",
+		);
+		if (choice !== "Install") {
+			void vscode.window.showWarningMessage(
+				"GoX: gopls is required. Configure gox.bin.gopls to use your gopls, or rerun the health check to install it into the GoX directory.",
+			);
+		} else {
+			goplsPath = await gopls.ensure(progress)
+		}
+	}
+	const gox = new Gox(ctx, versions.GOX);
+	progress.report({ message: 'Checking gox...' });
+	let goxPath = await gox.resolvePath()
+	if (goxPath == "") {
+		const choice = await vscode.window.showWarningMessage(
+			"GoX: GoX language server " +
+			versions.GOX +
+			" not found. Install it into the GoX directory now?",
+			{
+				modal: true,
+				detail: "Alternatively you can configure gox.bin.gox",
+			},
+			"Install",
+		);
+		if (choice !== "Install") {
+			void vscode.window.showWarningMessage(
+				"GoX: gox is required. Configure bin.gox to use your gox binary, or rerun the health check to install it into the GoX directory.",
+
+			);
+		} else {
+			goxPath = await gox.ensure(progress)
+		}
+	}
+	progress.report({ message: '...' });
+	if (goxPath == "" || goplsPath == "") {
+		void vscode.window.showWarningMessage(
+			'GoX language features are disabled. Run "gox.start" command to perform a healthcheck.',
+		);
+		return
+	}
+	const ok = promptDisableGopls(ctx)
+	if (!ok) {
+		void vscode.window.showWarningMessage(
+			'GoX language features are disabled. Run "gox.start" command to perform a healthcheck.',
+		);
+		return
+	}
+	client = new GoxLanguageClient(goplsPath, goxPath);
+	if (!active) {
+		client = undefined;
+		progress.report({ message: 'start canceled' });
+		return;
+	}
+	progress.report({ message: 'starting' });
+	await client.start();
+	ctx.subscriptions.push(client);
+
 }
 
 async function promptDisableGopls(ctx: vscode.ExtensionContext): Promise<boolean> {
@@ -89,12 +157,6 @@ async function promptDisableGopls(ctx: vscode.ExtensionContext): Promise<boolean
 	return true;
 }
 
-async function initalize(ctx: vscode.ExtensionContext): Promise<[string, string]> {
-	const gopls = new Gopls(ctx, versions.GOPLS);
-	const gox = new Gox(ctx, versions.GOX);
-	return [await gopls.ensure(), await gox.ensure()];
-}
-
 
 function deactivate() {
 	active = false;
@@ -106,9 +168,15 @@ function deactivate() {
 
 class GoxLanguageClient extends LanguageClient {
 	constructor(gopls: string, gox: string) {
+		let args = ["srv", "-gopls", gopls]
+		const logFile = vscode.workspace.getConfiguration("gox").get<string>("log.file");
+		if (logFile && logFile !== "") {
+			const logLevel = vscode.workspace.getConfiguration("gox").get<string>("log.level", "info");
+			args = [...args, "-log", logFile, "-log.level", logLevel]
+		}
 		const serverOptions: ServerOptions = {
 			command: gox,
-			args: ["srv", "-gopls", gopls],
+			args,
 		};
 		console.log("serverOptions", serverOptions)
 		const clientOptions: LanguageClientOptions = {
@@ -130,7 +198,7 @@ class GoxLanguageClient extends LanguageClient {
 
 class Gopls extends Tool {
 	protected name = "gopls"
-	protected async install() {
+	protected async install(progress: any) {
 		const binDir = await this.installDir();
 		const path = await this.executablePath();
 		await this.run("go", ["install", "golang.org/x/tools/gopls@" + this.version], { GOBIN: binDir });
@@ -140,7 +208,7 @@ class Gopls extends Tool {
 
 class Gox extends Tool {
 	protected name = "gox"
-	protected async install() {
+	protected async install(progress: any) {
 		const os = process.platform === "win32" ? "windows" :
 			process.platform === "darwin" ? "darwin" :
 				process.platform === "linux" ? "linux" :

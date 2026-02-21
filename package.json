@@ -33,6 +33,16 @@
 					"type": "string",
 					"default": "",
 					"description": "alternative path for gopls language server."
+				},
+				"gox.log.file": {
+					"type": "string",
+					"default": "",
+					"description": "gox language server log file path"
+				},
+				"gox.log.level": {
+					"type": "string",
+					"default": "info",
+					"description": "gox language server log level"
 				}
 			}
 		},
