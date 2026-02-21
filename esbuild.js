@@ -1,6 +1,4 @@
 const esbuild = require("esbuild");
-const path = require("path");
-const fs = require("fs/promises");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -20,17 +18,6 @@ const esbuildProblemMatcherPlugin = {
 				console.error(`✘ [ERROR] ${text}`);
 				console.error(`    ${location.file}:${location.line}:${location.column}:`);
 			});
-
-			if (result.errors.length !== 0) {
-				return
-			}
-			try {
-				await copyWasm()
-				await copyQuery()
-				console.log("[watch] assets copied")
-			} catch (e) {
-				console.error("✘ [ERROR] asset copy failed", e)
-			}
 		});
 	},
 }
@@ -68,32 +55,3 @@ main().catch(e => {
 });
 
 
-async function copyQuery() {
-	const srcDir = path.join(__dirname, "query");
-	const dstDir = path.join(__dirname, "dist", "query");
-	await fs.mkdir(dstDir, { recursive: true });
-	await fs.cp(srcDir, dstDir, {
-		recursive: true,
-		filter: (src) => path.resolve(src) !== path.resolve(srcDir, "LICENSE"),
-	});
-}
-
-async function copyWasm() {
-  const srcRoot = path.resolve("./wasm");
-  const dstRoot = path.resolve("./dist/wasm");
-  await fs.mkdir(dstRoot, { recursive: true });
-  const entries = await fs.readdir(srcRoot, { withFileTypes: true });
-  for (const ent of entries) {
-    if (!ent.isDirectory()) continue;
-    const subSrcDir = path.join(srcRoot, ent.name);
-    const subDstDir = path.join(dstRoot, ent.name);
-    const files = await fs.readdir(subSrcDir, { withFileTypes: true });
-    for (const f of files) {
-      if (!f.isFile() || !f.name.endsWith(".wasm")) continue;
-      await fs.mkdir(subDstDir, { recursive: true });
-      const srcFile = path.join(subSrcDir, f.name);
-      const dstFile = path.join(subDstDir, f.name); 
-      await fs.copyFile(srcFile, dstFile);
-    }
-  }
-}
