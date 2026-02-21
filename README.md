@@ -27,14 +27,14 @@ VS Code support for **GoX**: Tree-sitter–based highlighting/folding and GoX la
 
 On activation, the extension:
 
-1. Prompts to disable the VS Code Go extension language server (if it is enabled).
-2. Ensures `gox` and `gopls` are available (downloads/installs if missing).
+1. Ensures `gox` and `gopls` are available (downloads/installs if missing).
+2. Prompts to disable the VS Code Go extension language server (if it is enabled).
 3. Starts the GoX language server for Go and GoX files.
 
 ## Commands
 
 - **GoX: Start** (`gox.start`)  
-  Starts (or restarts) the GoX language server. Useful after changing settings.
+  Starts (or restarts) the GoX language server after performing a health check. Useful after changing settings.
 
 ## Settings
 
