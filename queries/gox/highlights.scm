@@ -16,44 +16,9 @@
 
 (gox_tilde_marker) @punctuation.special
 
-(gox_composite_arg
-  [
-    "("
-    ")"
-  ] @punctuation.special
-)
-
-(gox_attr_mod
-  [
-    "("
-    ")"
-  ] @punctuation.special)
-
-(gox_attr
-    [
-      "("
-      ")"
-    ] @punctuation.special)
-
-(gox_tilde_job
-  [
-    "("
-    ")"
-  ] @punctuation.special)
-
-(gox_tilde_if
-  [
-    "("
-    ")"
-  ] @punctuation.special)
-
-(gox_tilde_for
-  [
-    "("
-    ")"
-  ] @punctuation.special)
-
-(gox_redundant) @comment.warning
+(gox_lparen) @punctuation.special
+(gox_rparen) @punctuation.special
+(gox_redundant) @punctuation.special
 
 (gox_tilde_comment
   (gox_tilde_marker) @comment)

@@ -206,7 +206,7 @@ class Query {
 		return new Query(query)
 	}
 	private static async prepend(context: vscode.ExtensionContext, output: string, langId: string, kind: string): Promise<string> {
-		const uri = vscode.Uri.joinPath(context.extensionUri, "query", langId, kind + ".scm");
+		const uri = vscode.Uri.joinPath(context.extensionUri, "queries", langId, kind + ".scm");
 		let queryText: string;
 		try {
 			const bytes = await vscode.workspace.fs.readFile(uri);

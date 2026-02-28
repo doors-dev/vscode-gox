@@ -2,7 +2,22 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.9]
+
+- Gox version bump
+
+## [0.0.8]
+
+- Gox version bump
+
+## [0.0.7]
+
+- Gox version bump
+
+
+## [0.0.6]
+
+- Refactored grammer
 
 ## [0.0.5]
 
