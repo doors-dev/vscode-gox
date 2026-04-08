@@ -2,6 +2,10 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
+## [0.0.18]
+
+- Gox version bump
+
 ## [0.0.17]
 
 - Gox version bump
