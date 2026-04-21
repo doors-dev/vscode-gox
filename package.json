@@ -6,7 +6,7 @@
 		"type": "git",
 		"url":"https://github.com/doors-dev/vscode-gox"
 	},
-	"version": "0.0.20",
+	"version": "0.0.21",
 	"publisher": "doors-dev",
 	"engines": {
 		"vscode": "^1.109.0"
