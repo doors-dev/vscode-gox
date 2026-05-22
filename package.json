@@ -4,9 +4,9 @@
 	"description": "VS Code support for GoX: Tree-sitter–based highlighting/folding and GoX language-server integration for completion, diagnostics, go-to-definition, and refactors across both .gox and .go files.",
 	"repository": {
 		"type": "git",
-		"url":"https://github.com/doors-dev/vscode-gox"
+		"url": "https://github.com/doors-dev/vscode-gox"
 	},
-	"version": "0.0.22",
+	"version": "0.0.23",
 	"publisher": "doors-dev",
 	"engines": {
 		"vscode": "^1.109.0"
@@ -117,12 +117,12 @@
 		"@types/mocha": "10.0.10",
 		"@types/node": "22.x",
 		"@types/vscode": "1.109.0",
-		"@vscode/test-cli": "0.0.12",
+		"@vscode/test-cli": "^0.0.11",
 		"@vscode/test-electron": "2.5.2",
 		"esbuild": "0.27.2",
 		"extract-zip": "2.0.1",
 		"npm-run-all": "4.1.5",
-		"tar": "7.5.9",
+		"tar": "^7.5.15",
 		"typescript": "5.9.3",
 		"vscode-languageclient": "9.0.1",
 		"web-tree-sitter": "0.26.5"
