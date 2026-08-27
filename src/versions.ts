@@ -1,4 +1,4 @@
 export default {
-	GOPLS: "v0.22.0",
-	GOX: "v0.2.4",
+	GOPLS: "v0.23.0",
+	GOX: "v0.3.1",
 } as const
