@@ -2,6 +2,11 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
+## [0.0.31]
+
+- [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.2...v0.3.3)
+
+
 ## [0.0.30]
 
 - [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.1...v0.3.2)
