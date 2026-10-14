@@ -1,4 +1,5 @@
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import * as syncFs from 'fs';
@@ -9,6 +10,10 @@ import extractZip from "extract-zip";
 import { chmod, stat } from "node:fs/promises";
 import * as vscode from 'vscode';
 
+const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+const RUN_TIMEOUT_MS = 10 * 60 * 1000;
+const STALE_VERSION_MS = 7 * 24 * 60 * 60 * 1000;
+
 export default abstract class Tool {
 	protected abstract name: string;
 	constructor(protected ctx: vscode.ExtensionContext, readonly version: string) { }
@@ -18,36 +23,63 @@ export default abstract class Tool {
 	public async resolvePath(): Promise<string> {
 		const alternative = vscode.workspace.getConfiguration("gox").get<string | undefined>("bin." + this.name, undefined);
 		if (alternative && alternative != "") {
-			return alternative;
+			return this.configuredPath(alternative);
 		}
 		if (await this.check()) {
+			// marks the version as in use, see cleanOld
+			const now = new Date();
+			await fs.utimes(await this.installDir(), now, now).catch(() => undefined);
 			return this.executablePath();
 		}
 		return ""
 	}
+	private async configuredPath(value: string): Promise<string> {
+		const p = value === "~" || value.startsWith("~/") || value.startsWith("~\\") ? path.join(os.homedir(), value.slice(1)) : value;
+		// command names and relative paths are left to spawn
+		if (!path.isAbsolute(p)) {
+			return p;
+		}
+		try {
+			await fs.access(p, syncFs.constants.X_OK);
+		} catch (err) {
+			throw new Error(`GoX: setting gox.bin.${this.name} is "${value}", but ${p} is missing or not executable. Fix or clear the setting.`);
+		}
+		return p;
+	}
 	public async ensure(progress: any): Promise<string> {
-		const path = await this.resolvePath()
-		if (path != "") {
-			return path;
+		const resolved = await this.resolvePath()
+		if (resolved != "") {
+			return resolved;
 		}
 		/*
 		await vscode.window.showInformationMessage(
 			this.msg("installing " + this.version),
 		); */
-		await this.clearInstallDir();
-		await this.ensureInstallDir();
+		// install into a directory of our own next to the versions, then move it into place:
+		// other windows share the storage and may run the same install. cleanOld removes what an interrupted install left
+		const toolRoot = path.dirname(await this.installDir());
+		await fs.mkdir(toolRoot, { recursive: true });
+		const temp = this.tempDir = await fs.mkdtemp(path.join(toolRoot, "tmp-"));
 		try {
-			progress.report({ message: 'Installing ' + this.name + ' ' + this.version });
-			await this.install(progress);
-		} catch (err) {
-			const message = (err as any)?.message ?? "unknown";
-			throw new Error(this.msg("installation failed: " + message));
+			const stage = path.join(temp, "stage");
+			await fs.mkdir(stage);
+			try {
+				progress.report({ message: 'Installing ' + this.name + ' ' + this.version });
+				await this.install(progress, stage);
+			} catch (err) {
+				const message = (err as any)?.message ?? "unknown";
+				throw new Error(this.msg("installation failed: " + message), { cause: err });
+			}
+			const hash = await this.calcHash(this.binaryPath(stage));
+			if (hash === undefined) {
+				throw new Error(this.msg("binary not found after installation"));
+			}
+			await fs.writeFile(path.join(stage, "sha256.txt"), hash, "utf8");
+			await this.moveIntoPlace(stage);
+		} finally {
+			this.tempDir = undefined;
+			await fs.rm(temp, { recursive: true, force: true }).catch(() => undefined);
 		}
-		const hash = await this.calcHash();
-		if (hash === undefined) {
-			throw new Error(this.msg("binary not found after installation"));
-		}
-		await this.writeHash(hash);
 		await this.cleanOld();
 		/*
 		await vscode.window.showInformationMessage(
@@ -55,6 +87,29 @@ export default abstract class Tool {
 		); */
 		progress.report({ message: 'Successfuly installed ' + this.name + ' ' + this.version + ' to ' + await this.installDir() });
 		return await this.executablePath();
+	}
+	private async moveIntoPlace(stage: string): Promise<void> {
+		const installDir = await this.installDir();
+		await fs.mkdir(path.dirname(installDir), { recursive: true });
+		try {
+			await fs.rename(stage, installDir);
+			return
+		} catch (err) {
+			// install dir exists: another window got there first, or a broken leftover
+		}
+		if (await this.check()) {
+			return
+		}
+		try {
+			await fs.rm(installDir, { recursive: true, force: true });
+			await fs.rename(stage, installDir);
+		} catch (err) {
+			if (await this.check()) {
+				return
+			}
+			const message = (err as any)?.message ?? "unknown";
+			throw new Error(this.msg("installation failed: " + message), { cause: err });
+		}
 	}
 	private async cleanOld(): Promise<void> {
 		const toolRoot = path.join(await this.binDir(), this.name);
@@ -74,25 +129,17 @@ export default abstract class Tool {
 				continue
 			}
 			try {
-				await fs.rm(p, { recursive: true, force: true });
+				// another window may still run a recent version (missed if it has been open for longer than this)
+				if (Date.now() - (await stat(p)).mtimeMs > STALE_VERSION_MS) {
+					await fs.rm(p, { recursive: true, force: true });
+				}
 			} catch (err) {
 				continue
 			}
 		}
 	}
-	private _tempDir: string | undefined;
-	private async tempDir(): Promise<string> {
-		if (this._tempDir == undefined) {
-			this._tempDir = path.join(this.ctx.globalStorageUri.fsPath, "tmp");
-			await fs.mkdir(this._tempDir, { recursive: true });
-		}
-		return this._tempDir;
-	}
-	public async cleanTempDir() {
-		if (await this.exists(await this.tempDir())) {
-			await fs.rm(await this.tempDir(), { recursive: true, force: true });
-		}
-	}
+	// set while ensure() installs
+	private tempDir: string | undefined;
 	private _binDir: string | undefined;
 	private async binDir(): Promise<string> {
 		if (this._binDir == undefined) {
@@ -104,23 +151,14 @@ export default abstract class Tool {
 	protected async installDir(): Promise<string> {
 		return path.join(await this.binDir(), this.name, this.version);
 	}
-	private async ensureInstallDir(): Promise<void> {
-		const installDir = await this.installDir();
-		if (await this.exists(installDir)) {
-			return
-		}
-		await fs.mkdir(installDir, { recursive: true });
+	protected binaryPath(dir: string): string {
+		return path.join(dir, this.name + this.suffix());
 	}
 	protected async executablePath(): Promise<string> {
-		return path.join(await this.installDir(), this.name + this.suffix());
+		return this.binaryPath(await this.installDir());
 	}
 	private async hashPath(): Promise<string> {
 		return path.join(await this.installDir(), "sha256.txt");
-	}
-	private async clearInstallDir() {
-		if (await this.exists(await this.installDir())) {
-			await fs.rm(await this.installDir(), { recursive: true, force: true });
-		}
 	}
 	protected async check(): Promise<boolean> {
 		const hash = await this.readHash();
@@ -141,12 +179,8 @@ export default abstract class Tool {
 			return undefined;
 		}
 	}
-	private async writeHash(hash: string): Promise<void> {
-		const path = await this.hashPath();
-		await fs.writeFile(path, hash, "utf8");
-	}
-	protected async calcHash(): Promise<string | undefined> {
-		const path = await this.executablePath();
+	protected async calcHash(file?: string): Promise<string | undefined> {
+		const path = file ?? await this.executablePath();
 		return await new Promise((res) => {
 			const hash = crypto.createHash("sha256");
 			const stream = syncFs.createReadStream(path);
@@ -158,7 +192,7 @@ export default abstract class Tool {
 	protected suffix(): string {
 		return process.platform === "win32" ? ".exe" : "";
 	}
-	protected run(cmd: string, args: string[], envExt: NodeJS.ProcessEnv = {}): Promise<void> {
+	protected run(cmd: string, args: string[], envExt: NodeJS.ProcessEnv = {}, timeoutMs = RUN_TIMEOUT_MS): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const env = { ...process.env, ...envExt };
 			const p = spawn(cmd, args, {
@@ -167,29 +201,64 @@ export default abstract class Tool {
 				stdio: "pipe",
 			});
 			let stderr = "";
+			const timer = setTimeout(() => {
+				p.kill("SIGKILL");
+				reject(new Error(`${cmd} ${args.join(" ")} timed out after ${Math.round(timeoutMs / 1000)}s: ${stderr}`));
+			}, timeoutMs);
 			p.stderr.on("data", (d) => (stderr += String(d)));
-			p.on("error", reject);
+			p.on("error", (err) => {
+				clearTimeout(timer);
+				reject(err);
+			});
 			p.on("close", (code) => {
+				clearTimeout(timer);
 				if (code === 0) resolve();
 				else reject(new Error(`${cmd} ${args.join(" ")} failed (code ${code}): ${stderr}`));
 			});
 		});
 	}
+	private reason(err: unknown): string {
+		const message = (err as any)?.message ?? String(err);
+		const cause = (err as any)?.cause?.message;
+		return cause ? `${message} (${cause})` : message;
+	}
 	protected async download(url: string, filename: string): Promise<string> {
-		const destPath = path.join(await this.tempDir(), filename);
+		const destPath = path.join(this.tempDir!, filename);
+		const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
 		try {
 			const res = await fetch(url, {
 				headers: {
 					"Accept": "application/octet-stream",
 				},
 				redirect: "follow",
+				signal,
 			});
-			if (!res.ok) throw new Error(`Download failed: ${res.status} ${res.statusText}`);
-			await pipeline(res.body!, syncFs.createWriteStream(destPath));
+			if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+			await pipeline(res.body!, syncFs.createWriteStream(destPath), { signal });
 		} catch (err) {
-			throw new Error("download failed");
+			throw new Error(`download of ${url} failed: ${this.reason(err)}`, { cause: err });
 		}
 		return destPath;
+	}
+	// checks the file against the "<sha256>  <name>" list published at sumsUrl
+	protected async verifyChecksum(filePath: string, sumsUrl: string) {
+		const name = path.basename(filePath);
+		const sums = await fs.readFile(await this.download(sumsUrl, name + ".sums"), "utf8");
+		let expected: string | undefined;
+		for (const line of sums.split(/\r?\n/)) {
+			const m = /^([0-9a-fA-F]{64})\s+\*?(.+)$/.exec(line.trim());
+			if (m && m[2] === name) {
+				expected = m[1].toLowerCase();
+				break
+			}
+		}
+		if (expected === undefined) {
+			throw new Error(`no checksum for ${name} in ${sumsUrl}`);
+		}
+		const actual = await this.calcHash(filePath);
+		if (actual !== expected) {
+			throw new Error(`checksum mismatch for ${name}: expected ${expected}, got ${actual}`);
+		}
 	}
 	protected async extract(archivePath: string, outDir: string) {
 		try {
@@ -203,8 +272,9 @@ export default abstract class Tool {
 			}
 		}
 		catch (err) {
-			throw new Error("extraction failed");
+			throw new Error(`extraction of ${path.basename(archivePath)} failed: ${this.reason(err)}`, { cause: err });
 		}
+		throw new Error(`extraction failed: unsupported archive type ${path.basename(archivePath)}`);
 	}
 	private async exists(p: string): Promise<boolean> {
 		try { await fs.access(p); return true; }
@@ -215,6 +285,6 @@ export default abstract class Tool {
 		const mode = (await stat(filePath)).mode;
 		await chmod(filePath, mode | 0o111);
 	}
-	protected abstract install(progress: any): Promise<void>;
+	protected abstract install(progress: any, dir: string): Promise<void>;
 
 }

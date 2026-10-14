@@ -1,19 +1,9 @@
 {
   "comments": {
-    "lineComment": ["//", "~//]",
+    "lineComment": "//",
     "blockComment": [
-      [
-        "<!--",
-        "-->"
-      ],
-      [
-        "/*",
-        "*/"
-      ]
-      [
-        "~/*",
-        "*/"
-      ]
+      "/*",
+      "*/"
     ]
   },
   "brackets": [
@@ -181,7 +171,19 @@
     },
     {
       "beforeText": {
-        "pattern": "//.*"
+        "pattern": "^(?:[^\"'`]*\\s)?~//.*"
+      },
+      "afterText": {
+        "pattern": "^(?!\\s*$).+"
+      },
+      "action": {
+        "indent": "none",
+        "appendText": "~// "
+      }
+    },
+    {
+      "beforeText": {
+        "pattern": "^(?:[^\"'`]*\\s)?//.*"
       },
       "afterText": {
         "pattern": "^(?!\\s*$).+"

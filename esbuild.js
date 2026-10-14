@@ -1,4 +1,5 @@
 const esbuild = require("esbuild");
+const fs = require("fs");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -23,6 +24,8 @@ const esbuildProblemMatcherPlugin = {
 }
 
 async function main() {
+	// vscode-languageclient runs this from __dirname to force-kill a server (the copy keeps its mode, 755)
+	fs.cpSync('node_modules/vscode-languageclient/lib/node/terminateProcess.sh', 'dist/terminateProcess.sh');
 	const ctx = await esbuild.context({
 		entryPoints: [
 			'src/extension.ts'
@@ -53,5 +56,3 @@ main().catch(e => {
 	console.error(e);
 	process.exit(1);
 });
-
-

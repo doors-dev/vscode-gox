@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ChildProcess } from 'child_process';
 
 import versions from "./versions";
 
@@ -8,24 +9,67 @@ export default {
 }
 
 import {
+	CloseAction,
+	ErrorHandler,
 	LanguageClient,
 	LanguageClientOptions,
+	MessageTransports,
 	InitializeParams,
 	ServerOptions,
 } from "vscode-languageclient/node";
 
 import Tool from "./tool";
 
-let client: LanguageClient | undefined;
+const START_TIMEOUT_MS = 60 * 1000;
+
+let client: GoxLanguageClient | undefined;
+let output: vscode.OutputChannel | undefined;
 let active = false;
 
 function activate(ctx: vscode.ExtensionContext) {
 	active = true;
-	const disposable = vscode.commands.registerCommand("gox.start", start(ctx));
-	ctx.subscriptions.push(disposable);
-	vscode.commands.executeCommand("gox.start")
+	// one channel for every client, so a client that failed to start leaves none behind
+	output = vscode.window.createOutputChannel("GoX Language Server");
+	const run = start(ctx);
+	ctx.subscriptions.push(
+		output,
+		vscode.commands.registerCommand("gox.start", run),
+		vscode.workspace.onDidChangeConfiguration(async (e) => {
+			if (!e.affectsConfiguration("gox.bin") && !e.affectsConfiguration("gox.log")) {
+				return;
+			}
+			const choice = await vscode.window.showInformationMessage("GoX settings changed. Restart the language server?", "Restart");
+			if (choice === "Restart") {
+				void run();
+			}
+		}),
+	);
+	void run();
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => reject(new Error(message)), ms);
+		p.then(resolve, reject).finally(() => clearTimeout(timer));
+	});
+}
+
+// stops the client whatever state it is in
+async function stopClient(): Promise<void> {
+	const c = client;
+	if (!c) {
+		return;
+	}
+	client = undefined;
+	c.abandoned = true;
+	try {
+		await c.stop();
+	} catch (err) {
+		// stop() only shuts down a running server
+		c.kill();
+	}
+	c.diagnostics?.dispose();
+}
 
 function start(ctx: vscode.ExtensionContext) {
 	let inProgress = false;
@@ -41,14 +85,14 @@ function start(ctx: vscode.ExtensionContext) {
 					return;
 				}
 				inProgress = true;
-				if (client) {
-					client.stop();
-					client = undefined;
-				}
 				try {
+					await stopClient();
+					if (!active) {
+						return;
+					}
 					await health(ctx, progress)
 				} catch (err: any) {
-					vscode.window.showErrorMessage(err.message);
+					vscode.window.showErrorMessage(err?.message ?? String(err));
 				} finally {
 					inProgress = false
 				}
@@ -106,44 +150,48 @@ async function health(ctx: vscode.ExtensionContext, progress: any) {
 	progress.report({ message: '...' });
 	if (goxPath == "" || goplsPath == "") {
 		void vscode.window.showWarningMessage(
-			'GoX language features are disabled. Run "gox.start" command to perform a healthcheck.',
+			'GoX language features are disabled. Run the "GoX: Start" command to perform a healthcheck.',
 		);
 		return
 	}
-	const ok = promptDisableGopls(ctx)
+	const ok = await promptDisableGopls()
 	if (!ok) {
-		void vscode.window.showWarningMessage(
-			'GoX language features are disabled. Run "gox.start" command to perform a healthcheck.',
-		);
 		return
 	}
-	client = new GoxLanguageClient(goplsPath, goxPath);
-	if (!active) {
-		client = undefined;
+	if (!active || !output) {
 		progress.report({ message: 'start canceled' });
 		return;
 	}
+	const c = new GoxLanguageClient(goplsPath, goxPath, output);
+	client = c;
 	progress.report({ message: 'starting' });
-	await client.start();
-	ctx.subscriptions.push(client);
-
+	try {
+		await withTimeout(
+			c.start(),
+			START_TIMEOUT_MS,
+			`GoX language server did not start within ${START_TIMEOUT_MS / 1000} seconds. Check gox.bin.gox and gox.bin.gopls, then run the "GoX: Start" command.`,
+		);
+	} catch (err) {
+		await stopClient();
+		throw err;
+	}
+	c.started = true;
 }
 
-async function promptDisableGopls(ctx: vscode.ExtensionContext): Promise<boolean> {
+async function promptDisableGopls(): Promise<boolean> {
 	const goExt = vscode.extensions.getExtension("golang.go");
 	if (!goExt) {
 		return true
 	}
-	const enabled = vscode.workspace.getConfiguration("go").get("useLanguageServer", true);
-	if (!enabled) {
+	const enabled = () => vscode.workspace.getConfiguration("go").get("useLanguageServer", true);
+	if (!enabled()) {
 		return true
 	}
 	const choice = await vscode.window.showWarningMessage(
 		"GoX enables .gox support by proxying gopls, so the Go extension language server must be disabled. Disable it now?",
 		{
 			modal: true,
-			detail:
-				"This updates your user settings (applies to all workspaces). You can re-enable it at any time.",
+			detail: "This updates your user settings (applies to all workspaces). You can re-enable it at any time.",
 		},
 		"Yes, disable",
 	);
@@ -154,20 +202,27 @@ async function promptDisableGopls(ctx: vscode.ExtensionContext): Promise<boolean
 		return false;
 	}
 	await vscode.workspace.getConfiguration("go").update("useLanguageServer", false, true);
+	// a workspace setting wins over the user one
+	if (enabled()) {
+		void vscode.window.showWarningMessage(
+			'GoX language features are disabled: "go.useLanguageServer" is enabled in this workspace\'s .vscode/settings.json. Set it to false there and run the "GoX: Start" command.',
+		);
+		return false;
+	}
 	return true;
 }
 
-
-function deactivate() {
+function deactivate(): Promise<void> {
 	active = false;
-	if (client) {
-		client.stop();
-		client = undefined;
-	}
+	output = undefined;
+	return stopClient();
 }
 
 class GoxLanguageClient extends LanguageClient {
-	constructor(gopls: string, gox: string) {
+	// the library restarts the server only between these two: after a start succeeded, until the client is dropped
+	public started = false;
+	public abandoned = false;
+	constructor(gopls: string, gox: string, outputChannel: vscode.OutputChannel) {
 		let args = ["srv", "-gopls", gopls]
 		const logFile = vscode.workspace.getConfiguration("gox").get<string>("log.file");
 		if (logFile && logFile !== "") {
@@ -178,9 +233,17 @@ class GoxLanguageClient extends LanguageClient {
 			command: gox,
 			args,
 		};
-		console.log("serverOptions", serverOptions)
+		let self: GoxLanguageClient | undefined;
+		let fallback: ErrorHandler | undefined;
 		const clientOptions: LanguageClientOptions = {
-			documentSelector: [{ language: "gox" }, { language: "go" }],
+			documentSelector: [{ scheme: "file", language: "gox" }, { scheme: "file", language: "go" }],
+			outputChannel,
+			errorHandler: {
+				error: (error, message, count) => fallback!.error(error, message, count),
+				closed: () => self!.started && !self!.abandoned
+					? fallback!.closed()
+					: { action: CloseAction.DoNotRestart, handled: true },
+			},
 		};
 		super(
 			"gox",
@@ -188,6 +251,30 @@ class GoxLanguageClient extends LanguageClient {
 			serverOptions,
 			clientOptions
 		);
+		self = this;
+		fallback = this.createDefaultErrorHandler();
+	}
+	private proc: ChildProcess | undefined;
+	protected async createMessageTransports(encoding: string): Promise<MessageTransports> {
+		const transports = await super.createMessageTransports(encoding);
+		// the client forgets the process when a start fails
+		this.proc = (this as any)._serverProcess;
+		if (this.abandoned) {
+			// dropped while a restart was spawning
+			this.kill();
+			throw new Error("GoX language client was stopped");
+		}
+		return transports;
+	}
+	public error(message: string, data?: any, showNotification: boolean | "force" = true) {
+		// a dropped client still logs, but no longer notifies
+		super.error(message, data, this.abandoned ? false : showNotification);
+	}
+	public kill() {
+		const proc = this.proc;
+		if (proc && proc.exitCode === null && proc.signalCode === null) {
+			proc.kill("SIGKILL");
+		}
 	}
 	protected fillInitializeParams(params: InitializeParams): void {
 		super.fillInitializeParams(params);
@@ -195,20 +282,16 @@ class GoxLanguageClient extends LanguageClient {
 	}
 }
 
-
 class Gopls extends Tool {
 	protected name = "gopls"
-	protected async install(progress: any) {
-		const binDir = await this.installDir();
-		const path = await this.executablePath();
-		await this.run("go", ["install", "golang.org/x/tools/gopls@" + this.version], { GOBIN: binDir });
-		console.log("installed", path)
+	protected async install(progress: any, dir: string) {
+		await this.run("go", ["install", "golang.org/x/tools/gopls@" + this.version], { GOBIN: dir });
 	}
 }
 
 class Gox extends Tool {
 	protected name = "gox"
-	protected async install(progress: any) {
+	protected async install(progress: any, dir: string) {
 		const os = process.platform === "win32" ? "windows" :
 			process.platform === "darwin" ? "darwin" :
 				process.platform === "linux" ? "linux" :
@@ -225,13 +308,11 @@ class Gox extends Tool {
 		}
 		const ext = os === "windows" ? ".zip" : ".tar.gz";
 		const fileName = `gox_${os}_${cpu}${ext}`;
-		const file = await this.download(
-			`https://github.com/doors-dev/gox/releases/download/${this.version}/${fileName}`,
-			fileName
-		);
-		await this.extract(file, await this.installDir());
-		await this.makeExecutable(await this.executablePath());
-		await this.cleanTempDir();
+		const release = `https://github.com/doors-dev/gox/releases/download/${this.version}/`;
+		const file = await this.download(release + fileName, fileName);
+		await this.verifyChecksum(file, release + "SHA256SUMS");
+		await this.extract(file, dir);
+		await this.makeExecutable(this.binaryPath(dir));
 	}
 }
 

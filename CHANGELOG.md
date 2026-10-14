@@ -2,6 +2,14 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
+## [0.0.32]
+
+- Fixed: highlighting of embedded CSS/JS/HTML, missing colours on the first opened file, a memory leak
+- Fixed: comment toggling in `.gox` files
+- Fixed: declining the "disable Go language server" prompt now keeps the GoX server off
+- More reliable language server restart and binary install
+- Changing `gox.bin.*` / `gox.log.*` offers a server restart; command shown as "GoX: Start"
+
 ## [0.0.31]
 
 - [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.2...v0.3.3)

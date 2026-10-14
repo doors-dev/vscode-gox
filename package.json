@@ -6,7 +6,7 @@
 		"type": "git",
 		"url": "https://github.com/doors-dev/vscode-gox"
 	},
-	"version": "0.0.31",
+	"version": "0.0.32",
 	"publisher": "doors-dev",
 	"engines": {
 		"vscode": "^1.109.0"
@@ -27,31 +27,43 @@
 				"gox.bin.gox": {
 					"type": "string",
 					"default": "",
-					"description": "Alternative path for GoX language server."
+					"description": "Alternative path to the GoX language server executable."
 				},
 				"gox.bin.gopls": {
 					"type": "string",
 					"default": "",
-					"description": "alternative path for gopls language server."
+					"description": "Alternative path to the gopls executable."
 				},
 				"gox.log.file": {
 					"type": "string",
 					"default": "",
-					"description": "gox language server log file path"
+					"description": "GoX language server log file path. Logging is off when empty."
 				},
 				"gox.log.level": {
 					"type": "string",
 					"default": "info",
-					"description": "gox language server log level"
+					"enum": [
+						"debug",
+						"info",
+						"warn",
+						"error"
+					],
+					"description": "GoX language server log level. Used only when gox.log.file is set."
 				}
 			}
 		},
 		"commands": [
 			{
 				"command": "gox.start",
-				"title": "GoX server start or restart"
+				"title": "Start",
+				"category": "GoX"
 			}
 		],
+		"configurationDefaults": {
+			"[gox]": {
+				"editor.semanticHighlighting.enabled": true
+			}
+		},
 		"languages": [
 			{
 				"id": "gox",
@@ -110,7 +122,6 @@
 		"watch-tests": "tsc -p . -w --outDir out",
 		"pretest": "npm run compile-tests && npm run compile",
 		"check-types": "tsc --noEmit",
-		"lint": "eslint src",
 		"test": "vscode-test"
 	},
 	"devDependencies": {
