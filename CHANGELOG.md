@@ -2,6 +2,11 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
+## [0.0.33]
+
+- [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.3...v0.3.4)
+- gopls version bump (v0.23.0 → v0.24.0)
+
 ## [0.0.32]
 
 - Fixed: highlighting of embedded CSS/JS/HTML, missing colours on the first opened file, a memory leak
