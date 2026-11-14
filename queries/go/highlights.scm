@@ -32,6 +32,12 @@
   function: (selector_expression
     field: (field_identifier) @function.method.call))
 
+; pkg.F[T](x) and v.M[T](x) parse as a conversion to a generic type
+(type_conversion_expression
+  type: (generic_type
+    type: (qualified_type
+      name: (type_identifier) @function.method.call)))
+
 ; Function definitions
 (function_declaration
   name: (identifier) @function)
