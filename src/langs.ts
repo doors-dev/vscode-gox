@@ -179,8 +179,10 @@ class Lang {
 			const startRow = first.startPosition.row
 			const end = last.endPosition
 			let endRow = end.row
-			// keep the line with the closing delimiter visible
-			if (end.column === 0 || CLOSING.test(parsed.lines.text(endRow).slice(0, end.column))) {
+			// keep the line with the closing delimiter visible, and the next sibling's line
+			// when an implicit close (zero width, after the indentation) ends the node
+			const before = parsed.lines.text(endRow).slice(0, end.column)
+			if (end.column === 0 || /^\s*$/.test(before) || CLOSING.test(before)) {
 				endRow--
 			}
 			if (endRow <= startRow) continue
