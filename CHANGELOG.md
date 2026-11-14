@@ -2,6 +2,13 @@
 
 All notable changes to the "gox" extension will be documented in this file.
 
+## [0.0.34]
+
+- [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.4...v0.4.0). Breaking: the legacy `~{ }` and `func { }` forms are removed; see the [gox v0.4.0 notes](https://github.com/doors-dev/gox/releases/tag/v0.4.0)
+- Tree-sitter grammar updated to [tree-sitter-gox v0.3.2](https://github.com/doors-dev/tree-sitter-gox/releases/tag/v0.3.2): Go 1.27 generic methods, HTML implicit closing closer to browsers, no parser crash on `<` in a `<script>` or `<style>` attribute
+- Fixed: folding an implicitly closed element (`<li>` without `</li>`) hid the next line
+- Generic calls with one type argument (`F[T](x)`) are highlighted as calls
+
 ## [0.0.33]
 
 - [gox version bump](https://github.com/doors-dev/gox/compare/v0.3.3...v0.3.4)
