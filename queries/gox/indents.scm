@@ -10,11 +10,6 @@
 (gox_block
   "}" @indent.branch @indent.end)
 
-(gox_tilde_block) @indent.begin
-
-(gox_tilde_block
-  "}" @indent.branch @indent.end)
-
 (gox_style_head
   (gox_open_head)) @indent.begin
 
@@ -84,4 +79,3 @@
   ]
   .
   (gox_rparen) @indent.end @indent.branch)
-
